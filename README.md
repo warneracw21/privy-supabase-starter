@@ -1,37 +1,149 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Privy + Supabase Starter
 
-## Getting Started
+Use Supabase as your authentication provider while leveraging Privy's wallet infrastructure. This starter demonstrates how to authenticate users with Supabase and use their JWT tokens to authorize wallet actions through Privy's server-side SDK.
 
-First, run the development server:
+**[📖 Full Documentation](https://docs.privy.io/recipes/authentication/using-supabase-for-custom-auth)**
+
+## Features
+
+- 🔐 Supabase email/password authentication
+- 👛 Privy embedded wallet creation on signup
+- ✍️ Server-side message signing with user authorization
+- 💸 Sponsored transactions on Base Sepolia
+- 🎫 JWT token inspection and decoding
+
+## Prerequisites
+
+- A [Supabase](https://supabase.com) project
+- A [Privy](https://privy.io) app
+
+---
+
+## Setup
+
+### 1. Configure Supabase JWT Signing Keys
+
+Privy requires RS256 (asymmetric) JWT signing. By default, Supabase uses HS256.
+
+1. Go to your **Supabase Dashboard** → **Project Settings** → **API** → **JWT Settings**
+2. Create a new **Standby signing key** with RS256
+3. Click **Rotate keys** to make it the active signing key
+
+> ⚠️ **Gotcha:** Verify the JWKS endpoint returns keys. If the `keys` array is empty, complete the JWT signing key migration first.
+>
+> Check your endpoint: `https://<YOUR_PROJECT_ID>.supabase.co/auth/v1/.well-known/jwks.json`
+
+### 2. Configure Privy Custom Auth
+
+1. Go to your **Privy Dashboard** → **User Management** → **Authentication**
+2. Enable **Custom JWT authentication**
+3. Enter your Supabase JWKS endpoint:
+   ```
+   https://<YOUR_PROJECT_ID>.supabase.co/auth/v1/.well-known/jwks.json
+   ```
+
+### 3. Enable Gas Sponsorship (Optional)
+
+To use sponsored transactions on Base Sepolia:
+
+1. Go to your **Privy Dashboard** → **Policies & Controls** → **Gas Sponsorship**
+2. Enable **Base Sepolia** as a supported chain
+3. All testnet transactions are free!
+
+### 4. Configure Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in your values:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://<YOUR_PROJECT_ID>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your-supabase-anon-key
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# Privy
+PRIVY_APP_ID=your-privy-app-id
+PRIVY_APP_SECRET=your-privy-app-secret
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Disable Email Confirmation (Optional)
 
-## Learn More
+For a simpler dev experience:
 
-To learn more about Next.js, take a look at the following resources:
+1. Go to **Supabase Dashboard** → **Authentication** → **Providers** → **Email**
+2. Disable **Confirm email**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Run the App
 
-## Deploy on Vercel
+```bash
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# privy-supabase-starter
+---
+
+## How It Works
+
+### Authentication Flow
+
+1. User signs up/in with Supabase (email + password)
+2. On signup, a Privy user is created with a `custom_auth` linked account using the Supabase user ID
+3. An embedded Ethereum wallet is automatically created for the user
+
+### Authorized Wallet Actions
+
+Server-side endpoints use the Supabase JWT to authorize Privy wallet operations:
+
+```typescript
+// Get session from cookies
+const { data: { session } } = await supabase.auth.getSession();
+
+// Sign message with user's wallet
+await privy.wallets().ethereum().signMessage(walletId, {
+  message: "hello world",
+  authorization_context: {
+    user_jwts: [session.access_token],
+  },
+});
+```
+
+---
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/create-privy-user` | Creates a Privy user with embedded wallet on signup |
+| `POST /api/sign-message` | Signs "hello world" with the user's wallet |
+| `POST /api/send-transaction` | Sends a sponsored 0 ETH transaction on Base Sepolia |
+
+---
+
+## Project Structure
+
+```
+├── app/
+│   ├── api/
+│   │   ├── create-privy-user/   # Create Privy user on signup
+│   │   ├── sign-message/        # Sign message with wallet
+│   │   └── send-transaction/    # Send sponsored transaction
+│   └── page.tsx                 # Login UI + JWT display
+├── lib/
+│   ├── privy.ts                 # Privy server client
+│   ├── supabase.ts              # Supabase browser client
+│   └── supabase-server.ts       # Supabase server client (cookies)
+```
+
+---
+
+## Resources
+
+- [Privy Custom Auth Documentation](https://docs.privy.io/recipes/authentication/using-supabase-for-custom-auth)
+- [Supabase JWT Signing Keys](https://supabase.com/docs/guides/auth/jwts)
+- [Privy Server Wallets](https://docs.privy.io/guide/server-wallets)
