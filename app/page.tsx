@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { createClient } from "@/lib/supabase";
-import type { Session } from "@supabase/supabase-js";
+import { useState, useMemo } from "react";
+import { useSupabase } from "@/components/supabase-provider";
+import { usePrivy } from "@privy-io/react-auth";
 
 interface JwtPayload {
   sub?: string;
@@ -21,7 +21,6 @@ function decodeJwt(token: string): { header: object; payload: JwtPayload } | nul
     if (parts.length !== 3) return null;
 
     const decodeBase64Url = (str: string) => {
-      // Replace URL-safe chars and add padding
       const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
       const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
       return JSON.parse(atob(padded));
@@ -37,9 +36,11 @@ function decodeJwt(token: string): { header: object; payload: JwtPayload } | nul
 }
 
 export default function Home() {
+  const { supabase, session, loading: sessionLoading } = useSupabase();
+  const { getAccessToken } = usePrivy();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -59,41 +60,10 @@ export default function Home() {
   } | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
-  const supabase = createClient();
-
   const decodedJwt = useMemo(() => {
     if (!session?.access_token) return null;
     return decodeJwt(session.access_token);
   }, [session?.access_token]);
-
-  useEffect(() => {
-    // Check for existing session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const createPrivyUser = async (sub: string, userEmail: string) => {
-    const response = await fetch("/api/create-privy-user", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sub, email: userEmail }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      console.error("Failed to create Privy user:", data.error);
-    }
-  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,16 +72,11 @@ export default function Home() {
 
     try {
       if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-
-        // Create Privy user with the Supabase user's sub (user id)
-        if (data.user) {
-          await createPrivyUser(data.user.id, email);
-        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -128,7 +93,6 @@ export default function Home() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setSession(null);
     setSignatureResult(null);
     setSignError(null);
     setTxResult(null);
@@ -141,8 +105,13 @@ export default function Home() {
     setSignatureResult(null);
 
     try {
+      const privyAccessToken = await getAccessToken();
+      
       const response = await fetch("/api/sign-message", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${privyAccessToken}`,
+        },
       });
 
       const data = await response.json();
@@ -169,8 +138,13 @@ export default function Home() {
     setTxResult(null);
 
     try {
+      const privyAccessToken = await getAccessToken();
+      
       const response = await fetch("/api/send-transaction", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${privyAccessToken}`,
+        },
       });
 
       const data = await response.json();
@@ -190,6 +164,33 @@ export default function Home() {
       setSendingTx(false);
     }
   };
+
+  // Loading state
+  if (sessionLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-white/60">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   // Authenticated view - show JWT
   if (session) {
@@ -625,7 +626,7 @@ export default function Home() {
 
         {/* Footer */}
         <p className="text-center mt-6 text-white/30 text-xs">
-          Powered by Supabase Auth
+          Powered by Supabase Auth + Privy
         </p>
       </div>
     </div>

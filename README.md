@@ -84,8 +84,8 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 ### Authentication Flow
 
 1. User signs up/in with Supabase (email + password)
-2. On signup, a Privy user is created with a `custom_auth` linked account using the Supabase user ID
-3. An embedded Ethereum wallet is automatically created for the user
+2. Privy automatically creates a user with an embedded wallet when authenticated (via `createOnLogin: 'all-users'`)
+3. The Supabase JWT is passed to Privy for wallet operations authorization
 
 ### Authorized Wallet Actions
 
@@ -110,7 +110,6 @@ await privy.wallets().ethereum().signMessage(walletId, {
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/create-privy-user` | Creates a Privy user with embedded wallet on signup |
 | `POST /api/sign-message` | Signs "hello world" with the user's wallet |
 | `POST /api/send-transaction` | Sends a sponsored 0 ETH transaction on Base Sepolia |
 
@@ -121,10 +120,12 @@ await privy.wallets().ethereum().signMessage(walletId, {
 ```
 ├── app/
 │   ├── api/
-│   │   ├── create-privy-user/   # Create Privy user on signup
 │   │   ├── sign-message/        # Sign message with wallet
 │   │   └── send-transaction/    # Send sponsored transaction
 │   └── page.tsx                 # Login UI + JWT display
+├── components/
+│   ├── privy-provider.tsx       # Privy + Supabase provider wrapper
+│   └── supabase-provider.tsx    # Supabase auth context
 ├── lib/
 │   ├── privy.ts                 # Privy server client
 │   ├── supabase.ts              # Supabase browser client

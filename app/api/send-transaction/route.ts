@@ -1,13 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { privy } from "@/lib/privy";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const BASE_SEPOLIA_CAIP2 = "eip155:84532";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    // Get the Supabase session from cookies
+    const authHeader = request.headers.get("Authorization");
+    const privyAccessToken = authHeader?.replace("Bearer ", "");
+
+    if (!privyAccessToken) {
+      return NextResponse.json(
+        { error: "Missing Privy access token" },
+        { status: 401 }
+      );
+    }
+
+    // Get the Supabase session from cookies to get user ID
     const supabase = await createServerSupabaseClient();
     const { data: { session }, error: authError } = await supabase.auth.getSession();
 
@@ -18,10 +28,8 @@ export async function POST() {
       );
     }
 
-    const user = session.user;
-
     // Get the Privy user by their custom auth ID (Supabase user ID)
-    const privyUser = await privy.users().getByCustomAuthID({ custom_user_id: user.id });
+    const privyUser = await privy.users().getByCustomAuthID({ custom_user_id: session.user.id });
 
     if (!privyUser) {
       return NextResponse.json(
@@ -55,7 +63,7 @@ export async function POST() {
       },
       caip2: BASE_SEPOLIA_CAIP2,
       authorization_context: {
-        user_jwts: [session.access_token],
+        user_jwts: [privyAccessToken],
       },
     });
 
@@ -73,4 +81,3 @@ export async function POST() {
     );
   }
 }
-
