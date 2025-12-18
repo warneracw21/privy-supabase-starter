@@ -68,15 +68,6 @@ PRIVY_APP_ID=your-privy-app-id
 PRIVY_APP_SECRET=your-privy-app-secret
 ```
 
-### 5. Disable Email Confirmation (Optional)
-
-For a simpler dev experience:
-
-1. Go to **Supabase Dashboard** → **Authentication** → **Providers** → **Email**
-2. Disable **Confirm email**
-
----
-
 ## Run the App
 
 ```bash
